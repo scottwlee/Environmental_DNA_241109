@@ -1,12 +1,24 @@
-### Define function
+# ============================================================================
+# Function: zi.pi
+# Purpose: Calculate within-module (Zi) and among-module (Pi) connectivity
+# Inputs:
+#   - nodes_bulk: dataframe with node metadata including degree and modularity class
+#   - z.bulk: binary adjacency matrix (unweighted)
+#   - modularity_class: column name in nodes_bulk indicating module membership
+#   - degree: column name in nodes_bulk indicating node degree
+# Output:
+#   - Dataframe with Zi, Pi, and merged node metadata
+# ============================================================================
+
 zi.pi<-function(nodes_bulk, z.bulk, modularity_class, degree){
 
-z.bulk[abs(z.bulk)>0]<-1
+## SECTION 1: Initialization -----------------------------------------------
+z.bulk[abs(z.bulk)>0]<-1 # convert to binary adjacency matrix
 module<-which(colnames(nodes_bulk)==modularity_class)
 module.max<-max(nodes_bulk[,module])
 degree<-which(colnames(nodes_bulk)==degree)
 
-### Split the correlation matrix according to modules
+## SECTION 2: Split adjacency matrix by module ----------------------------
 bulk.module<-list(NA)
 length(bulk.module)<-module.max
 
@@ -17,7 +29,7 @@ for(i in 1:max(nodes_bulk[,module])){
 	colnames(bulk.module[[i]])<-colnames(z.bulk)[which(nodes_bulk[,module]==i)]
 }
 
-### Within-module connectivity z
+## SECTION 3: Calculate Zi (within-module connectivity) -------------------
 z_bulk<-list(NA)
 length(z_bulk)<-module.max
 
@@ -28,7 +40,6 @@ for(i in 1:length(z_bulk)){
 	rownames(z_bulk[[i]])<-rownames(bulk.module[[i]])
 }
 
-### Calculate z value
 for(i in 1:max(nodes_bulk[,module])){
 	if(length(bulk.module[[i]])==1){
 		z_bulk[[i]][,1]<-0
@@ -46,13 +57,13 @@ for(i in 1:max(nodes_bulk[,module])){
 	}
 }
 
-### z value merge
+# Merge Zi values into a single dataframe
 for(i in 2:max(nodes_bulk[,module])) {
 	z_bulk[[i]]<-rbind(z_bulk[[i-1]],z_bulk[[i]])
 }
 z_bulk<-z_bulk[[module.max]]
 
-### Split correlation matrix columns by modules
+## SECTION 4: Split adjacency matrix columns by module (for Pi) ----------
 bulk.module1<-list(NA)
 length(bulk.module1)<-module.max
 
@@ -63,7 +74,7 @@ for(i in 1:max(nodes_bulk[,module])){
 	colnames(bulk.module1[[i]])<-colnames(z.bulk)[which(nodes_bulk[,module]==i)]
 }
 
-### Among-module connectivity c
+## SECTION 5: Initialize Pi containers ------------------------------------
 c_bulk<-list(NA)
 length(c_bulk)<-module.max
 
@@ -75,7 +86,7 @@ for(i in 1:length(c_bulk)){
 	c_bulk[[i]][,1]<-NA
 }
 
-### Number of connections per node per module squared
+## SECTION 6: Calculate squared connections to each module ---------------
 for(i in 1:max(nodes_bulk[,module])){
 	c_bulk[[i]]<-rowSums(bulk.module1[[i]])
 	c_bulk[[i]]<-as.matrix(c_bulk[[i]])
@@ -85,12 +96,13 @@ for(i in 1:max(nodes_bulk[,module])){
 	rownames(c_bulk[[i]])<-rownames(z.bulk)
 }
 
-### Sum of square
+## SECTION 7: Sum over all modules and calculate Pi -----------------------
 for(i in 2:max(nodes_bulk[,module])){
 	c_bulk[[i]]<-c_bulk[[i]]+c_bulk[[i-1]]
 }
 c_bulk<-c_bulk[[module.max]]
 
+# Final Pi calculation per node
 for(i in 1: length(c_bulk)){
 if(nodes_bulk$degree[i]==1){
         c_bulk[i] <- 0
@@ -100,13 +112,14 @@ if(nodes_bulk$degree[i]==1){
 }
 colnames(c_bulk)<-"c"
 
-### z,c integration
+## SECTION 8: Merge Zi and Pi with metadata -------------------------------
 z_c_bulk<-c_bulk
 z_c_bulk<-as.data.frame(z_c_bulk)
 z_c_bulk$z<-z_bulk[match(rownames(c_bulk),rownames(z_bulk)),]
 z_c_bulk<-z_c_bulk[,c(2,1)]
 names(z_c_bulk)[1:2]<-c('within_module_connectivities','among_module_connectivities')
 
+# Add node IDs and merge with original metadata
 z_c_bulk$nodes_id<-rownames(z_c_bulk)
 nodes_bulk$nodes_id<-rownames(nodes_bulk)
 z_c_bulk<-merge(z_c_bulk,nodes_bulk,by='nodes_id')
