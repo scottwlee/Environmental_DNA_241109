@@ -1,11 +1,12 @@
-source("http://bioconductor.org/biocLite.R")
-source("https://bioconductor.org/biocLite.R")
+##################################################################################################
+### 1. Package Installation & Setup
+##################################################################################################
 
+# Bioconductor package installer (legacy; not required in recent versions)
+# source("http://bioconductor.org/biocLite.R")  # Deprecated
+# source("https://bioconductor.org/biocLite.R")
 
-##########################################################################################
-########## Preparation ##########
-##########################################################################################
-### Package installation
+# Install required Bioconductor and CRAN packages
 if (!require("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 BiocManager::install()
@@ -15,17 +16,17 @@ install.packages(c("matrixStats", "Hmisc", "splines", "foreach", "doParallel", "
 install.packages("WGCNA")
 install.packages("vegan")
 
-### Working directory setup
+# Set working directory (modify as appropriate)
 setwd("D://")
 
-### Package loading
+# Load required libraries
 library("WGCNA")
 library("vegan")
 
+##################################################################################################
+### 2. Load OTU Table or Expression Data and Apply Hellinger Transformation
+##################################################################################################
 
-##########################################################################################
-########## Input data ##########
-##########################################################################################
 data<-read.table("XXX.txt",header=T,na.strings="NA",row.names=1)
 HellingerData<-decostand(data,method = "hellinger")
 write.table(t(HellingerData), file = "YYY.txt", sep="\t")
@@ -38,14 +39,14 @@ datExpr0 = as.data.frame(t(rt[,-1]))
 names(datExpr0) = rt[,1] # If the first line is not named by ID, write it as "rt[,1]" 
 rownames(datExpr0) = names(rt[,-1])
 
+##################################################################################################
+### 3. Check for Missing Data and Filter
+##################################################################################################
 
-##########################################################################################
-########## Check missing value and filter ##########
-##########################################################################################
-### WGCNA, "Code chunk 3"/ Check missing value
 gsg = goodSamplesGenes(datExpr0, verbose = 3)
 gsg$allOK
 
+# Remove problematic genes and samples, if necessary
 # if (!gsg$allOK)
 {
   # Optionally, print the gene and sample names that were removed:
@@ -57,10 +58,10 @@ gsg$allOK
   datExpr0 = datExpr0[gsg$goodSamples, gsg$goodGenes]
 }
 
+##################################################################################################
+### 4. Sample Clustering to Identify Outliers
+##################################################################################################
 
-##########################################################################################
-########## sample cluster ##########
-##########################################################################################
 sampleTree = hclust(dist(datExpr0), method = "average")
 # Plot the sample tree: Open a graphic output window of size 12 by 9 inches
 # The user should change the dimensions if the window is too large or too small
@@ -71,9 +72,7 @@ par(cex = 0.6)
 par(mar = c(0,4,2,0))
 plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5,
      cex.axis = 1.5, cex.main = 2)
-
-### Plot a line to show the cut
-## abline(h = 10000, col = "red")
+# abline(h = 10000, col = "red") # Optional cut line
 dev.off()
 
 ### Determine cluster under the line 
@@ -83,11 +82,10 @@ dev.off()
 ## datExpr0 = datExpr0[keepSamples, ]
 ### (In general, not used unless the figure is quite complex and simplification is necessary)
 
+##################################################################################################
+### 5. Load Environmental Trait Data and Align with Expression Matrix
+##################################################################################################
 
-##########################################################################################
-########## Input trait data/ Environmental Factors ##########
-##########################################################################################
-### Loading environmental factors data
 traitData = read.table("environmental_factors.txt",row.names=1,header=T,comment.char = "",check.names=F)
 dim(traitData)
 names(traitData)
@@ -114,10 +112,10 @@ plotDendroAndColors(sampleTree2, traitColors,
                     main = "Sample dendrogram and trait heatmap")
 dev.off()
 
+##################################################################################################
+### 6. Network Construction and Module Detection
+##################################################################################################
 
-##########################################################################################
-########## Network construction ##########
-##########################################################################################
 enableWGCNAThreads()
 
 # Choose a set of soft-thresholding powers
@@ -148,7 +146,8 @@ plot(sft$fitIndices[,1], sft$fitIndices[,5],
 text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
 dev.off()
 
-
+################################################################################
+################################################################################
 
 ### Choose the soft power
 # Creates connection strengths between pairs of samples
@@ -175,7 +174,8 @@ plot(geneTree, xlab="", sub="", main = "Gene clustering on TOM-based dissimilari
      labels = FALSE, hang = 0.4)
 dev.off()
 
-
+################################################################################
+################################################################################
 
 ### Set the minimum module size/ We like large modules, so we set the minimum module size relatively high
 minModuleSize = # e.g., 1, 2, 3, ...
@@ -200,9 +200,9 @@ plotDendroAndColors(geneTree, dynamicColors, "Dynamic Tree Cut",
                     main = "Gene dendrogram and module colors")
 dev.off()
 
-
-
-### Merging of modules whose expression profiles are very similar
+##################################################################################################
+### 7. Merge Similar Modules Based on Eigengene Similarity
+##################################################################################################
 
 # Calculate eigengenes
 MEList = moduleEigengenes(datExpr0, colors = dynamicColors)
@@ -222,7 +222,8 @@ MEDissThres = 0.75 # We choose a height cut of 0.25, corresponding to correlatio
 abline(h=MEDissThres, col = "red")
 dev.off()
 
-
+################################################################################
+################################################################################
 
 # Call an automatic merging function
 merge = mergeCloseModules(datExpr0, dynamicColors, cutHeight = MEDissThres, verbose = 3)
@@ -241,7 +242,8 @@ plotDendroAndColors(geneTree, cbind(dynamicColors, mergedColors),
                     addGuide = TRUE, guideHang = 0.05)
 dev.off()
 
-
+################################################################################
+################################################################################
 
 moduleColors = mergedColors # Rename to moduleColors
 
@@ -251,10 +253,10 @@ colorOrder = c("grey", standardColors(50))
 moduleLabels = match(moduleColors, colorOrder)-1
 MEs = mergedMEs
 
+##################################################################################################
+### 8. Relate Module Eigengenes to Environmental Traits
+##################################################################################################
 
-##########################################################################################
-########## Relate modules to external clinical traits ##########
-##########################################################################################
 # Define numbers of genes and samples
 nGenes = ncol(datExpr0)
 nSamples = nrow(datExpr0)
@@ -283,10 +285,10 @@ labeledHeatmap(Matrix = moduleTraitCor,
                main = paste("Module-trait relationships"))
 dev.off()
 
+##################################################################################################
+### 9. Calculate Gene Significance (GS) and Module Membership (MM)
+##################################################################################################
 
-##########################################################################################
-########## Define variable weight containing all column of datTraits ##########
-##########################################################################################
 ### GS and MM
 modNames = substring(names(MEs), 3) # Names (colors) of the modules
 
@@ -306,7 +308,8 @@ names(GSPvalue) = paste("p.GS.", traitNames, sep="")
 
 # Each row corresponds to a module eigengene, column to a trait
 
-
+################################################################################
+################################################################################
 
 ### Plot GS vs MM for each trait vs each module
 
@@ -354,10 +357,10 @@ for (trait in traitNames){
 names(datExpr0)
 probes = names(datExpr0)
 
+##################################################################################################
+### 10. Export Gene-Level GS and MM Info
+##################################################################################################
 
-##########################################################################################
-########## Export GS and MM ##########
-##########################################################################################
 geneInfo0 = data.frame(probes= probes,
                        moduleColor = moduleColors)
 for (Tra in 1:ncol(geneTraitSignificance))
@@ -381,10 +384,10 @@ geneOrder =order(geneInfo0$moduleColor)
 geneInfo = geneInfo0[geneOrder, ]
 write.table(geneInfo, file = "GS_MM.xls",sep="\t",row.names=F)
 
+##################################################################################################
+### 11. Network Heatmap Visualizations (Full and Subset)
+##################################################################################################
 
-##########################################################################################
-########## visualizing the gene network ##########
-##########################################################################################
 nGenes = ncol(datExpr0)
 nSamples = nrow(datExpr0)
 
@@ -397,7 +400,8 @@ pdf(file="10_allgene_heatmap.pdf",width=9, height=9) # SizeGrWindow (9,9)
 TOMplot(plotTOM, geneTree, moduleColors, main = "Network heatmap plot, all genes")
 dev.off()
 
-
+################################################################################
+################################################################################
 
 nSelect = 400
 set.seed(10) ### For reproducibility, we set the random seed
@@ -419,17 +423,18 @@ pdf(file="11_selectgene_heatmap.pdf",width=9, height=9)
 TOMplot(plotDiss, selectTree, selectColors, main = "Network heatmap plot, selected genes")
 dev.off()
 
+##################################################################################################
+### 12. Eigengene Network Visualization
+##################################################################################################
 
-##########################################################################################
-########## visualizing the gene network of eigengenes ##########
-##########################################################################################
 # SizeGrWindow (5,7.5)
 pdf(file="12_module_dendrogram.pdf",width=6, height=6)
 par(cex = 1.0)
 plotEigengeneNetworks(MEs, "Eigengene dendrogram", marDendro = c(0,4,2,0), plotHeatmaps = FALSE)
 dev.off()
 
-
+################################################################################
+################################################################################
 
 ### Or devide into two parts
 # Plot the dendrogram
@@ -439,17 +444,18 @@ par(cex = 1.0)
 plotEigengeneNetworks(MEs, "Eigengene adjacency heatmap", marHeatmap = c(3,4,2,2), plotDendrograms = FALSE, xLabelsAngle = 90)
 dev.off()
 
-
+################################################################################
+################################################################################
 
 pdf(file="14_dendrogram_heatmap.pdf", width=5, height=7.5) # Plot the heatmap matrix (Note; This plot will overwrite the dendrogram plot)
 par(cex = 0.9)
 plotEigengeneNetworks(MEs, "", marDendro = c(0,4,1,2), marHeatmap = c(3,4,1,2), cex.lab = 0.8, xLabelsAngle= 90)
 dev.off()
 
+##################################################################################################
+### 13. Export Module Networks to Cytoscape
+##################################################################################################
 
-##########################################################################################
-########## Exporting to Cytoscape ##########
-##########################################################################################
 cytoDir="CytoscapeInput"
 dir.create(cytoDir)
 for (mod in 1:nrow(table(moduleColors)))
